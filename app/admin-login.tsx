@@ -1,0 +1,281 @@
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Eye, EyeOff, ArrowRight, Mail, Lock, Shield } from 'lucide-react-native';
+import useWalletStore from '@/store/walletStore';
+import Colors from '@/constants/colors';
+import { trpcClient } from '@/lib/trpc';
+
+export default function AdminLoginScreen() {
+  const router = useRouter();
+  const { setCurrentUser } = useWalletStore();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Authenticate admin
+      const admin = await trpcClient.users.adminLogin.mutate({
+        email,
+        password
+      });
+      
+      // Check if user is admin
+      if (!admin.isAdmin) {
+        Alert.alert('Access Denied', 'This account does not have admin privileges.');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Set current user and navigate to admin panel
+      setCurrentUser(admin);
+      router.replace('/admin');
+    } catch (error: any) {
+      console.error('Admin login error:', error);
+      
+      // Provide more specific error messages based on error type
+      if (error.message && error.message.includes('Network request failed')) {
+        Alert.alert(
+          'Connection Error', 
+          'Unable to connect to the server. Please check your internet connection and make sure the server is running.\n\nIf you are running in development mode, please verify the API URL configuration in lib/trpc.ts.',
+          [{ text: 'OK' }]
+        );
+      } else if (error.message && error.message.includes('Invalid admin credentials')) {
+        Alert.alert('Login Failed', 'Invalid admin credentials. Please try again.');
+      } else {
+        Alert.alert('Login Failed', error.message || 'An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+      >
+        <LinearGradient
+          colors={['#7928CA', '#FF0080']}
+          style={styles.header}
+        >
+          <View style={styles.brandContainer}>
+            <Text style={styles.title}>Admin Portal</Text>
+            <Text style={styles.subtitle}>Agile Wallet Management</Text>
+          </View>
+        </LinearGradient>
+        
+        <View style={styles.formContainer}>
+          <View style={styles.adminBadge}>
+            <Shield size={20} color="#FFFFFF" />
+            <Text style={styles.adminBadgeText}>Admin Access Only</Text>
+          </View>
+          
+          <Text style={styles.formTitle}>Administrator Login</Text>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Email</Text>
+            <View style={styles.inputWrapper}>
+              <Mail size={20} color={Colors.dark.subtext} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter admin email"
+                placeholderTextColor={Colors.dark.subtext}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
+          </View>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <View style={styles.inputWrapper}>
+              <Lock size={20} color={Colors.dark.subtext} style={styles.inputIcon} />
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter admin password"
+                placeholderTextColor={Colors.dark.subtext}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff size={20} color={Colors.dark.subtext} />
+                ) : (
+                  <Eye size={20} color={Colors.dark.subtext} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.loginButton}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.loginButtonText}>Admin Login</Text>
+                <ArrowRight size={20} color="#FFFFFF" />
+              </>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.backButtonText}>Back to User Login</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+  },
+  contentContainer: {
+    flexGrow: 1,
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 40,
+    alignItems: 'center',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  brandContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  formContainer: {
+    padding: 24,
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF0080',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  adminBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.dark.text,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: Colors.dark.subtext,
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  inputIcon: {
+    marginLeft: 16,
+  },
+  input: {
+    flex: 1,
+    padding: 16,
+    color: Colors.dark.text,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    color: Colors.dark.text,
+  },
+  eyeButton: {
+    padding: 16,
+  },
+  loginButton: {
+    backgroundColor: '#7928CA',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  loginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 8,
+  },
+  backButton: {
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: Colors.dark.subtext,
+    fontSize: 14,
+  },
+});
